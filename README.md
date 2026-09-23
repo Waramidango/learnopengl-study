@@ -32,6 +32,7 @@ WSLgを利用して、WSL上で作成したOpenGLアプリケーションのウ�
 | g++             | 15.2.0                     |
 | CMake           | 4.2.3                      |
 | Git             | 2.53.0                     |
+| GLFW            | 3.4                        |
 
 `build-essential` は、UbuntuでC/C++開発を行うための基本的なパッケージ群。
 
@@ -49,13 +50,22 @@ C++のコンパイルには `g++`、プロジェクトのビルド設定・生�
 
 ### OpenGL Dependencies
 
-今後、以下のライブラリを導入する。
+現在、GLFWを導入済み。
 
-| Library | Purpose                      |
-| ------- | ---------------------------- |
-| OpenGL  | グラフィックスAPI                   |
-| GLFW    | ウィンドウ作成、入力処理、OpenGLコンテキストの作成 |
-| GLAD    | OpenGL APIの関数をロードするためのローダー   |
+| Library | Version / Purpose                  |
+| ------- | ---------------------------------- |
+| GLFW    | 3.4 / ウィンドウ作成、入力処理、OpenGLコンテキストの作成 |
+| OpenGL  | グラフィックスAPI                         |
+| GLAD    | OpenGL APIの関数をロードするためのローダー         |
+
+GLFWはUbuntuのパッケージマネージャから導入した。
+
+```bash
+sudo apt update
+sudo apt install libglfw3-dev
+```
+
+`libglfw3-dev` により、GLFWを利用したC++プログラムのコンパイルに必要な開発用ファイルを導入している。
 
 ## Project Structure
 
@@ -65,6 +75,7 @@ C++のコンパイルには `g++`、プロジェクトのビルド設定・生�
 learnopengl-study/
 ├── .gitignore
 ├── README.md
+├── CMakeLists.txt
 ├── src/
 │   └── main.cpp
 └── shaders/
@@ -101,6 +112,10 @@ cmake --build build
 ```
 
 `build/` 以下にはCMakeによって生成されるビルド関連ファイルが保存される。
+
+`CMakeLists.txt` では、プロジェクトで使用するC++標準や外部ライブラリなどのビルド設定を管理する。
+
+現在は、CMakeからシステムにインストールされたGLFWを検出し、プロジェクトにリンクする構成を作成している。
 
 ## Git
 
@@ -153,9 +168,10 @@ build/
 * [x] Gitリポジトリの作成
 * [x] `.gitignore` の設定
 * [x] GitHubへのリモートリポジトリ設定
-* [ ] GLFWの導入
+* [x] GLFW 3.4の導入
+* [x] `CMakeLists.txt` の作成
+* [ ] CMakeによるプロジェクトの構成・ビルド確認
 * [ ] GLADの導入
-* [ ] CMakeによるOpenGLプロジェクトの構築
 * [ ] GLFWによるウィンドウ生成
 * [ ] OpenGLコンテキストの作成
 * [ ] 最初の三角形の描画
