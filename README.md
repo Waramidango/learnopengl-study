@@ -4,6 +4,10 @@
 
 Visual StudioなどのIDEに依存した環境ではなく、**WSL上でCMakeを使ってビルドできる開発環境を自分で構築すること**を目的とする。
 
+単にLearnOpenGLのコードを動かすだけではなく、C++、CMake、GLFW、OpenGL、GLAD、GLSLなど、それぞれがどの役割を持ち、どのように連携しているのかを理解することを重視する。
+
+---
+
 ## Goals
 
 * OpenGLの基本的な描画パイプラインを理解する
@@ -11,7 +15,10 @@ Visual StudioなどのIDEに依存した環境ではなく、**WSL上でCMakeを
 * シェーダー（GLSL）の仕組みを理解する
 * CMakeによるC++プロジェクトのビルド方法を理解する
 * 外部ライブラリの依存関係を把握し、自分で管理できるようにする
+* CPU側のC++とGPU側のGLSLがどのように連携するのか理解する
 * 最終的に、リアルタイムレンダリングの仕組みを自分で実装・改造できるようにする
+
+---
 
 ## Development Environment
 
@@ -22,9 +29,13 @@ Visual StudioなどのIDEに依存した環境ではなく、**WSL上でCMakeを
 * Ubuntu
 * WSLg
 
-WSLgを利用して、WSL上で作成したOpenGLアプリケーションのウィンドウをWindows側に表示する。
+WSLgを利用することで、WSL上で実行したGUIアプリケーションのウィンドウをWindows側に表示する。
 
-### Development Tools
+今回の環境では、WSL上のOpenGLアプリケーションからWindows側のGPUを利用できることも確認している。
+
+---
+
+## Development Tools
 
 | Tool / Package  | Version / Description      |
 | --------------- | -------------------------- |
@@ -33,6 +44,8 @@ WSLgを利用して、WSL上で作成したOpenGLアプリケーションのウ�
 | CMake           | 4.2.3                      |
 | Git             | 2.53.0                     |
 | GLFW            | 3.4                        |
+
+### build-essential
 
 `build-essential` は、UbuntuでC/C++開発を行うための基本的なパッケージ群。
 
@@ -46,63 +59,51 @@ build-essential
 └── その他、C/C++開発に必要な基本パッケージ
 ```
 
-C++のコンパイルには `g++`、プロジェクトのビルド設定・生成には `CMake`、バージョン管理には `Git` を使用する。
+C++のコンパイルには `g++` を使用する。
 
-### OpenGL Dependencies
+---
 
-現在、GLFWを導入済み。
+### g++
 
-| Library | Version / Purpose                  |
-| ------- | ---------------------------------- |
-| GLFW    | 3.4 / ウィンドウ作成、入力処理、OpenGLコンテキストの作成 |
-| OpenGL  | グラフィックスAPI                         |
-| GLAD    | OpenGL APIの関数をロードするためのローダー         |
+C++のソースコードをコンパイルするためのコンパイラ。
 
-GLFWはUbuntuのパッケージマネージャから導入した。
-
-```bash
-sudo apt update
-sudo apt install libglfw3-dev
-```
-
-`libglfw3-dev` により、GLFWを利用したC++プログラムのコンパイルに必要な開発用ファイルを導入している。
-
-## Project Structure
-
-現在の構成：
+例えば、
 
 ```text
-learnopengl-study/
-├── .gitignore
-├── README.md
-├── CMakeLists.txt
-├── src/
-│   └── main.cpp
-└── shaders/
+main.cpp
+   ↓
+  g++
+   ↓
+実行可能ファイル
 ```
 
-今後、OpenGL関連のライブラリやビルドディレクトリを追加していく。
+という形で、C++のソースコードをコンピュータが実行できる形式へ変換する。
 
-最終的には、例えば以下のような構成を想定している。
+このプロジェクトでは、CMakeからg++を利用してC++をビルドする。
+
+---
+
+### CMake
+
+C++プロジェクトのビルド設定を管理するためのツール。
+
+このプロジェクトでは、
 
 ```text
-learnopengl-study/
-├── .gitignore
-├── README.md
-├── CMakeLists.txt
-├── src/
-│   └── main.cpp
-├── shaders/
-│   ├── vertex.glsl
-│   └── fragment.glsl
-├── external/
-│   └── glad/
-└── build/
+CMakeLists.txt
+      ↓
+CMake
+      ↓
+ビルドシステム
+      ↓
+g++
+      ↓
+実行可能ファイル
 ```
 
-## Build System
+という関係になる。
 
-CMakeを使用してプロジェクトをビルドする。
+CMakeそのものがC++コンパイラというわけではなく、**「どのソースコードを、どのライブラリと組み合わせて、どのようにビルドするか」を設定する役割**を持つ。
 
 基本的なビルド方法：
 
@@ -111,11 +112,315 @@ cmake -S . -B build
 cmake --build build
 ```
 
-`build/` 以下にはCMakeによって生成されるビルド関連ファイルが保存される。
 
-`CMakeLists.txt` では、プロジェクトで使用するC++標準や外部ライブラリなどのビルド設定を管理する。
+## OpenGL Environment
 
-現在は、CMakeからシステムにインストールされたGLFWを検出し、プロジェクトにリンクする構成を作成している。
+このプロジェクトでは、複数のソフトウェア・ライブラリがそれぞれ異なる役割を担当している。
+
+大まかな関係は以下の通り。
+
+```text
+                  ┌──────────────┐
+                  │   C++ code   │
+                  │   main.cpp   │
+                  └──────┬───────┘
+                         │
+                         ↓
+                  ┌──────────────┐
+                  │    GLFW      │
+                  │ Window/Input │
+                  │   Context    │
+                  └──────┬───────┘
+                         │
+                         ↓
+                  ┌──────────────┐
+                  │   OpenGL     │
+                  │ Graphics API │
+                  └──────┬───────┘
+                         │
+              ┌──────────┴──────────┐
+              ↓                     ↓
+       ┌─────────────┐       ┌─────────────┐
+       │    GLAD     │       │    GLSL     │
+       │ OpenGL      │       │   Shader    │
+       │ function    │       │   program   │
+       │ loader      │       │             │
+       └─────────────┘       └─────────────┘
+```
+
+### GLFW
+
+GLFWは、OpenGLアプリケーションのための**ウィンドウ・入力・OpenGLコンテキスト管理ライブラリ**。
+
+主な役割：
+
+* ウィンドウの作成
+* キーボード・マウス入力の処理
+* OpenGLコンテキストの作成
+* ウィンドウイベントの処理
+* バッファの交換
+
+例えば、
+
+```cpp
+GLFWwindow* window = glfwCreateWindow(
+    800,
+    600,
+    "LearnOpenGL Study",
+    nullptr,
+    nullptr
+);
+```
+
+によって800×600のウィンドウを作成できる。
+
+**GLFWそのものがグラフィックスを描画するライブラリではない**。
+
+GLFWは主に、
+
+> 「OpenGLを使って描画するためのウィンドウや実行環境を用意する」
+
+役割を担当する。
+
+---
+
+### OpenGL
+
+OpenGLは、GPUを利用して2D・3Dグラフィックスを描画するための**グラフィックスAPI**。
+
+例えば、
+
+* 頂点データをGPUへ送る
+* バッファを作成する
+* シェーダーを使用する
+* テクスチャを扱う
+* 描画命令を発行する
+
+といった処理を行う。
+
+GLFWとは役割が異なる。
+
+```text
+GLFW
+↓
+「描画するためのウィンドウ・コンテキストを用意する」
+
+OpenGL
+↓
+「その環境で実際にグラフィックス処理を行う」
+```
+
+---
+
+### GLAD
+
+GLADは、OpenGLの関数をプログラムから利用できるようにする**OpenGLローダー**。
+
+OpenGLでは、特に新しいバージョンの機能を使用する場合、実行時にGPUドライバから関数のアドレスを取得して利用する必要がある。
+
+GLADはその処理を担当する。
+
+```text
+C++ program
+     ↓
+   GLAD
+     ↓
+OpenGL functions
+     ↓
+GPU driver
+     ↓
+GPU
+```
+
+そのため、
+
+* GLFW = ウィンドウやコンテキスト
+* GLAD = OpenGL関数を利用するためのローダー
+* OpenGL = グラフィックスAPI
+
+という関係になる。
+
+---
+
+### GLSL
+
+GLSL（OpenGL Shading Language）は、OpenGLで使用する**シェーダーを記述するための言語**。
+
+例えば、
+
+```text
+C++ program
+    ↓
+OpenGL API
+    ↓
+GPU
+    ↓
+GLSL shader
+    ↓
+画面上のピクセル
+```
+
+という形で利用する。
+
+GLSLはC++とは別の言語であり、主にGPU上で実行される処理を記述する。
+
+今後、
+
+* Vertex Shader
+* Fragment Shader
+* 座標変換
+* ライティング
+* テクスチャ
+* ポストプロセス
+
+などを学習する。
+
+---
+
+## WSLg / Graphics Environment
+
+WSLgは、WSL上でLinuxのGUIアプリケーションをWindows側に表示するための環境。
+
+今回のプロジェクトでは、
+
+```text
+Windows
+   │
+   ├── GPU
+   │
+   └── WSLg
+        │
+        ↓
+      WSL
+        │
+        ├── C++ program
+        ├── GLFW
+        └── OpenGL
+```
+
+という構成になっている。
+
+WSL上で作成したGLFWウィンドウがWindows側に表示されることを確認済み。
+
+また、WSL上のOpenGL環境からWindows側のGPUを利用できることも確認している。
+
+---
+
+## OpenGL Dependencies
+
+現在導入済みの主なOpenGL関連環境：
+
+| Library / API |               Version | Purpose                     |
+| ------------- | --------------------: | --------------------------- |
+| GLFW          |                   3.4 | ウィンドウ作成、入力処理、OpenGLコンテキスト管理 |
+| OpenGL        | 4.1 Core Profileを確認済み | グラフィックスAPI                  |
+| GLAD          |                   未導入 | OpenGL APIの関数ローダー           |
+| GLSL          |             OpenGLに対応 | GPU上で実行するシェーダー言語            |
+
+### GLFWの導入
+
+Ubuntuのパッケージマネージャから導入した。
+
+```bash
+sudo apt update
+sudo apt install libglfw3-dev
+```
+
+`libglfw3-dev` は、GLFWを利用したプログラムを開発するためのヘッダーファイルや開発用ファイルを提供する。
+
+また、GLFW本体の実行時ライブラリも依存関係として導入される。
+
+---
+
+## Project Structure
+
+現在の構成：
+
+```text
+learnopengl-study/
+
+├── .gitignore
+├── README.md
+├── CMakeLists.txt
+├── src/
+│   └── main.cpp
+└── shaders/
+```
+
+今後、GLADやシェーダーなどを追加していく。
+
+現時点で想定している構成：
+
+```text
+learnopengl-study/
+
+├── .gitignore
+├── README.md
+├── CMakeLists.txt
+│
+├── src/
+│   └── main.cpp
+│
+├── shaders/
+│   ├── vertex.glsl
+│   └── fragment.glsl
+│
+├── external/
+│   └── glad/
+│
+└── build/
+```
+
+`build/` はCMakeによって生成されるため、Gitでは管理しない。
+
+---
+
+## Build System
+
+CMakeを使用してプロジェクトをビルドする。
+
+現在の `CMakeLists.txt`：
+
+```cmake
+cmake_minimum_required(VERSION 3.20)
+
+project(learnopengl-study LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(glfw3 REQUIRED)
+
+add_executable(learnopengl-study
+    src/main.cpp
+)
+
+target_link_libraries(learnopengl-study
+    PRIVATE
+    glfw
+)
+```
+
+### ビルド
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+実行：
+
+```bash
+./build/learnopengl-study
+```
+
+WSL上のOpenGL環境を明示して実行する場合：
+
+```bash
+GALLIUM_DRIVER=d3d12 ./build/learnopengl-study
+```
+
+---
 
 ## Git
 
@@ -129,6 +434,8 @@ WSL
 GitHub
 ```
 
+---
+
 ## .gitignore
 
 ビルド時に生成されるファイルはGitで管理しない。
@@ -141,7 +448,21 @@ build/
 
 `build/` はCMakeによって生成されるため、リポジトリには含めない。
 
-これにより、ソースコードや設定ファイルと、環境ごとに生成されるビルド成果物を分離する。
+これにより、
+
+```text
+ソースコード・設定
+        ↓
+Gitで管理
+
+ビルドによる生成物
+        ↓
+Gitで管理しない
+```
+
+という分離ができる。
+
+---
 
 ## Learning Policy
 
@@ -149,17 +470,43 @@ build/
 
 * 何をインストールしているのか
 * それぞれのライブラリが何を担当しているのか
+* GLFWとOpenGLは何が違うのか
+* GLADはなぜ必要なのか
 * CMakeが何をしているのか
 * コンパイラがどのようにプログラムをビルドしているのか
 * CPU側のC++とGPU側のシェーダーがどのように連携するのか
+* GPU上で実際に何が実行されているのか
 
 を確認しながら学習する。
 
-そのため、外部ライブラリやビルド環境についても、可能な限り依存関係を明示して管理する。
+特に、
+
+```text
+C++ / CPU
+    ↓
+OpenGL API
+    ↓
+GPU driver
+    ↓
+GPU
+    ↓
+GLSL shader
+    ↓
+画面
+```
+
+という流れを意識して学習する。
+
+外部ライブラリについても、可能な限り「何のために存在するのか」を理解した上で導入する。
+
+---
 
 ## Current Progress
 
-* [x] WSL Ubuntu環境の構築
+### Environment
+
+* [x] WSL2 Ubuntu環境の構築
+* [x] WSLgによるGUI表示の確認
 * [x] `build-essential` の導入
 * [x] g++の導入
 * [x] CMakeの導入
@@ -168,17 +515,62 @@ build/
 * [x] Gitリポジトリの作成
 * [x] `.gitignore` の設定
 * [x] GitHubへのリモートリポジトリ設定
+
+### GLFW / OpenGL
+
 * [x] GLFW 3.4の導入
 * [x] `CMakeLists.txt` の作成
-* [ ] CMakeによるプロジェクトの構成・ビルド確認
+* [x] CMakeによるプロジェクトの構成・ビルド確認
+* [x] GLFWの初期化
+* [x] GLFWによるウィンドウ生成
+* [x] OpenGLコンテキストの作成
+* [x] WSL上でウィンドウをWindows側に表示
 * [ ] GLADの導入
-* [ ] GLFWによるウィンドウ生成
-* [ ] OpenGLコンテキストの作成
+* [ ] OpenGL関数のロード
 * [ ] 最初の三角形の描画
+
+### Rendering
+
 * [ ] GLSLシェーダーの学習
+* [ ] Vertex Shader
+* [ ] Fragment Shader
+* [ ] VBO / VAO
+* [ ] EBO
 * [ ] テクスチャ
 * [ ] 座標変換
+* [ ] カメラ
 * [ ] ライティング
 * [ ] シャドウ
 * [ ] ポストプロセス
 * [ ] レンダリングパイプラインの理解
+
+### Future Goals
+
+* [ ] OpenGLでリアルタイムレンダラーを構築する
+* [ ] GPU上で行われる処理を理解する
+* [ ] GLSL / HLSLなどのシェーダープログラミングにつなげる
+* [ ] レンダリング技術をUE / 3DGSなどの研究・制作へ応用する
+
+---
+
+## Current Status
+
+現在は、
+
+```text
+C++
+ ↓
+CMake
+ ↓
+GLFW
+ ↓
+OpenGL Context
+ ↓
+WSLg
+ ↓
+Windows上にウィンドウ表示
+```
+
+までの環境構築が完了している。
+
+次の段階では、GLADを導入してOpenGL APIの関数を利用できる状態にし、**実際にGPUへ描画命令を送り、最初の三角形を描画する**。
