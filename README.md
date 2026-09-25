@@ -53,6 +53,7 @@ WSLgを利用することで、WSL上で実行したGUIアプリケーション�
 
 ```text
 build-essential
+
 ├── gcc
 ├── g++
 ├── make
@@ -96,14 +97,16 @@ CMake
       ↓
 ビルドシステム
       ↓
-g++
+g++ / gcc
       ↓
 実行可能ファイル
 ```
 
 という関係になる。
 
-CMakeそのものがC++コンパイラというわけではなく、**「どのソースコードを、どのライブラリと組み合わせて、どのようにビルドするか」を設定する役割**を持つ。
+CMakeそのものがC++コンパイラというわけではなく、**「どのソースコードを、どのライブラリと組み合わせ、どのようにビルドするか」を設定する役割**を持つ。
+
+このプロジェクトではC++だけでなく、GLADの `gl.c` をコンパイルするためC言語も使用する。
 
 基本的なビルド方法：
 
@@ -112,6 +115,7 @@ cmake -S . -B build
 cmake --build build
 ```
 
+---
 
 ## OpenGL Environment
 
@@ -120,33 +124,35 @@ cmake --build build
 大まかな関係は以下の通り。
 
 ```text
-                  ┌──────────────┐
-                  │   C++ code   │
-                  │   main.cpp   │
-                  └──────┬───────┘
-                         │
-                         ↓
-                  ┌──────────────┐
-                  │    GLFW      │
-                  │ Window/Input │
-                  │   Context    │
-                  └──────┬───────┘
-                         │
-                         ↓
-                  ┌──────────────┐
-                  │   OpenGL     │
-                  │ Graphics API │
-                  └──────┬───────┘
-                         │
-              ┌──────────┴──────────┐
-              ↓                     ↓
-       ┌─────────────┐       ┌─────────────┐
-       │    GLAD     │       │    GLSL     │
-       │ OpenGL      │       │   Shader    │
-       │ function    │       │   program   │
-       │ loader      │       │             │
-       └─────────────┘       └─────────────┘
+              ┌──────────────┐
+              │   C++ code   │
+              │   main.cpp   │
+              └──────┬───────┘
+                     │
+                     ↓
+              ┌──────────────┐
+              │    GLFW      │
+              │ Window/Input │
+              │   Context    │
+              └──────┬───────┘
+                     │
+                     ↓
+              ┌──────────────┐
+              │   OpenGL     │
+              │ Graphics API │
+              └──────┬───────┘
+                     │
+             ┌───────┴────────┐
+             ↓                ↓
+      ┌─────────────┐  ┌─────────────┐
+      │    GLAD     │  │    GLSL     │
+      │ OpenGL      │  │   Shader    │
+      │ function    │  │   program   │
+      │ loader      │  │             │
+      └─────────────┘  └─────────────┘
 ```
+
+---
 
 ### GLFW
 
@@ -174,7 +180,7 @@ GLFWwindow* window = glfwCreateWindow(
 
 によって800×600のウィンドウを作成できる。
 
-**GLFWそのものがグラフィックスを描画するライブラリではない**。
+**GLFWそのものがグラフィックスを描画するライブラリではない。**
 
 GLFWは主に、
 
@@ -202,12 +208,23 @@ GLFWとは役割が異なる。
 
 ```text
 GLFW
+
 ↓
+
 「描画するためのウィンドウ・コンテキストを用意する」
 
 OpenGL
+
 ↓
+
 「その環境で実際にグラフィックス処理を行う」
+```
+
+現在の環境では、実行時に以下のOpenGLバージョンを確認している。
+
+```text
+OpenGL version: 4.1 (Compatibility Profile)
+Mesa 26.0.8-1ubuntu0.3
 ```
 
 ---
@@ -216,7 +233,7 @@ OpenGL
 
 GLADは、OpenGLの関数をプログラムから利用できるようにする**OpenGLローダー**。
 
-OpenGLでは、特に新しいバージョンの機能を使用する場合、実行時にGPUドライバから関数のアドレスを取得して利用する必要がある。
+OpenGLでは、実行時にOpenGLドライバから関数のアドレスを取得して利用する必要がある。
 
 GLADはその処理を担当する。
 
@@ -231,6 +248,28 @@ GPU driver
      ↓
 GPU
 ```
+
+このプロジェクトではGLAD 2を使用している。
+
+```cpp
+#include <glad/gl.h>
+```
+
+OpenGLコンテキストをGLFWで作成した後、
+
+```cpp
+gladLoadGL((GLADloadfunc)glfwGetProcAddress);
+```
+
+によってOpenGL関数をロードする。
+
+その結果、例えば、
+
+```cpp
+glGetString(GL_VERSION)
+```
+
+をC++から呼び出してOpenGLのバージョンを取得できることを確認している。
 
 そのため、
 
@@ -291,7 +330,7 @@ Windows
    └── WSLg
         │
         ↓
-      WSL
+       WSL
         │
         ├── C++ program
         ├── GLFW
@@ -304,18 +343,26 @@ WSL上で作成したGLFWウィンドウがWindows側に表示されることを
 
 また、WSL上のOpenGL環境からWindows側のGPUを利用できることも確認している。
 
+現在の実行では、
+
+```bash
+GALLIUM_DRIVER=d3d12 ./build/learnopengl-study
+```
+
+を使用している。
+
 ---
 
 ## OpenGL Dependencies
 
 現在導入済みの主なOpenGL関連環境：
 
-| Library / API |               Version | Purpose                     |
-| ------------- | --------------------: | --------------------------- |
-| GLFW          |                   3.4 | ウィンドウ作成、入力処理、OpenGLコンテキスト管理 |
-| OpenGL        | 4.1 Core Profileを確認済み | グラフィックスAPI                  |
-| GLAD          |                   未導入 | OpenGL APIの関数ローダー           |
-| GLSL          |             OpenGLに対応 | GPU上で実行するシェーダー言語            |
+| Library / API |                        Version | Purpose                     |
+| ------------- | -----------------------------: | --------------------------- |
+| GLFW          |                            3.4 | ウィンドウ作成、入力処理、OpenGLコンテキスト管理 |
+| OpenGL        | 4.1 Compatibility Profileを確認済み | グラフィックスAPI                  |
+| GLAD          |                         GLAD 2 | OpenGL APIの関数ローダー           |
+| GLSL          |                OpenGL 4.1環境で利用 | GPU上で実行するシェーダー言語            |
 
 ### GLFWの導入
 
@@ -332,6 +379,31 @@ sudo apt install libglfw3-dev
 
 ---
 
+### GLADの導入
+
+GLAD 2でOpenGLのローダーを生成し、プロジェクト内に配置している。
+
+```text
+external/glad/
+
+├── include/
+│   ├── glad/
+│   │   └── gl.h
+│   └── KHR/
+│       └── khrplatform.h
+│
+└── src/
+    └── gl.c
+```
+
+`gl.c` はC言語のソースコードであるため、CMakeではC言語も有効にしている。
+
+```cmake
+project(learnopengl-study LANGUAGES C CXX)
+```
+
+---
+
 ## Project Structure
 
 現在の構成：
@@ -342,36 +414,28 @@ learnopengl-study/
 ├── .gitignore
 ├── README.md
 ├── CMakeLists.txt
-├── src/
-│   └── main.cpp
-└── shaders/
-```
-
-今後、GLADやシェーダーなどを追加していく。
-
-現時点で想定している構成：
-
-```text
-learnopengl-study/
-
-├── .gitignore
-├── README.md
-├── CMakeLists.txt
 │
 ├── src/
 │   └── main.cpp
-│
-├── shaders/
-│   ├── vertex.glsl
-│   └── fragment.glsl
 │
 ├── external/
 │   └── glad/
+│       ├── include/
+│       │   ├── glad/
+│       │   │   └── gl.h
+│       │   └── KHR/
+│       │       └── khrplatform.h
+│       └── src/
+│           └── gl.c
+│
+├── shaders/
 │
 └── build/
 ```
 
 `build/` はCMakeによって生成されるため、Gitでは管理しない。
+
+`shaders/` には今後、GLSLのVertex ShaderやFragment Shaderを配置する予定。
 
 ---
 
@@ -384,7 +448,7 @@ CMakeを使用してプロジェクトをビルドする。
 ```cmake
 cmake_minimum_required(VERSION 3.20)
 
-project(learnopengl-study LANGUAGES CXX)
+project(learnopengl-study LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -393,6 +457,12 @@ find_package(glfw3 REQUIRED)
 
 add_executable(learnopengl-study
     src/main.cpp
+    external/glad/src/gl.c
+)
+
+target_include_directories(learnopengl-study
+    PRIVATE
+    external/glad/include
 )
 
 target_link_libraries(learnopengl-study
@@ -400,6 +470,39 @@ target_link_libraries(learnopengl-study
     glfw
 )
 ```
+
+### CMakeでのGLADの扱い
+
+GLADはこのプロジェクト内の `external/glad/` に配置しているため、CMakeから直接ソースファイルを指定してビルドする。
+
+```text
+CMake
+ │
+ ├── src/main.cpp
+ │       ↓
+ │      C++
+ │
+ └── external/glad/src/gl.c
+         ↓
+        C
+```
+
+また、
+
+```cmake
+target_include_directories(learnopengl-study
+    PRIVATE
+    external/glad/include
+)
+```
+
+によって、
+
+```cpp
+#include <glad/gl.h>
+```
+
+からGLADのヘッダーファイルを参照できるようにしている。
 
 ### ビルド
 
@@ -420,47 +523,6 @@ WSL上のOpenGL環境を明示して実行する場合：
 GALLIUM_DRIVER=d3d12 ./build/learnopengl-study
 ```
 
----
-
-## Git
-
-Gitを使用してソースコードや学習内容の変更を管理する。
-
-GitHubへの接続にはSSH認証を使用する。
-
-```text
-WSL
- ↓ SSH
-GitHub
-```
-
----
-
-## .gitignore
-
-ビルド時に生成されるファイルはGitで管理しない。
-
-現在の `.gitignore`：
-
-```gitignore
-build/
-```
-
-`build/` はCMakeによって生成されるため、リポジトリには含めない。
-
-これにより、
-
-```text
-ソースコード・設定
-        ↓
-Gitで管理
-
-ビルドによる生成物
-        ↓
-Gitで管理しない
-```
-
-という分離ができる。
 
 ---
 
@@ -486,7 +548,7 @@ C++ / CPU
     ↓
 OpenGL API
     ↓
-GPU driver
+OpenGL driver
     ↓
 GPU
     ↓
@@ -525,12 +587,23 @@ GLSL shader
 * [x] GLFWによるウィンドウ生成
 * [x] OpenGLコンテキストの作成
 * [x] WSL上でウィンドウをWindows側に表示
-* [ ] GLADの導入
-* [ ] OpenGL関数のロード
+* [x] GLAD 2の導入
+* [x] GLADをCMakeプロジェクトに組み込み
+* [x] GLADヘッダのinclude
+* [x] GLADによるOpenGL関数のロード
+* [x] `glGetString(GL_VERSION)` によるOpenGLバージョン取得
 * [ ] 最初の三角形の描画
+
+現在確認できているOpenGLバージョン：
+
+```text
+OpenGL version: 4.1 (Compatibility Profile)
+Mesa 26.0.8-1ubuntu0.3
+```
 
 ### Rendering
 
+* [ ] `glClear()` による画面クリア
 * [ ] GLSLシェーダーの学習
 * [ ] Vertex Shader
 * [ ] Fragment Shader
@@ -559,18 +632,32 @@ GLSL shader
 
 ```text
 C++
- ↓
+  ↓
 CMake
- ↓
+  ↓
 GLFW
- ↓
+  ↓
 OpenGL Context
- ↓
-WSLg
- ↓
+  ↓
+GLAD
+  ↓
+OpenGL functions
+  ↓
+Mesa / WSLg
+  ↓
+Windows側のGPU
+  ↓
 Windows上にウィンドウ表示
 ```
 
 までの環境構築が完了している。
 
-次の段階では、GLADを導入してOpenGL APIの関数を利用できる状態にし、**実際にGPUへ描画命令を送り、最初の三角形を描画する**。
+また、
+
+```cpp
+glGetString(GL_VERSION)
+```
+
+を使用して、実際にOpenGL関数をC++から呼び出せることを確認している。
+
+次の段階では、まず `glClear()` を使ってOpenGLによる画面描画を確認し、その後VBO・VAO・GLSLシェーダーを使用して**最初の三角形を描画する**。

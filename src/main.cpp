@@ -1,4 +1,5 @@
 #include <iostream>
+#include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
 void glfw_error_callback(int error, const char* description)
@@ -51,6 +52,18 @@ int main()
 
     // OpenGLコンテキストをこのウィンドウに設定
     glfwMakeContextCurrent(window);
+
+    if (!gladLoadGL((GLADloadfunc)glfwGetProcAddress)) {
+        std::cerr << "Failed to initialize GLAD" << std::endl;
+
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return -1;
+    }
+
+    std::cout << "OpenGL version: "
+              << glGetString(GL_VERSION)
+              << std::endl;
 
     // ウィンドウが閉じられるまで待つ
     while (!glfwWindowShouldClose(window)) {
